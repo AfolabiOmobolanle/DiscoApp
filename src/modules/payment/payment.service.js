@@ -1,28 +1,26 @@
 const axios = require('axios');
 const db    = require('../../db/knex');
- 
-const PS = axios.create({
-  baseURL: 'https://api.paystack.co',
-  headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+
+const SP = axios.create({
+  baseURL: process.env.SECUREPAY_BASE_URL || 'https://securepay-staging-api.getsecurepay.ai',
+  headers: {
+    'X-Api-Key':    process.env.SECUREPAY_API_KEY,
+    'Content-Type': 'application/json',
+  },
 });
- 
-const BP = axios.create({
-  baseURL: process.env.BUYPOWER_API_URL,
-  headers: { Authorization: `Bearer ${process.env.BUYPOWER_API_TOKEN}` },
-});
- 
-// ── Initiate Paystack payment + save pending transaction ──────────────────────
+
+// ── Initiate payment + save pending transaction ───────────────────────────────
 async function initiatePayment(meterNumber, amount) {
   const reference = `WU_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
- 
-  const res = await PS.post('/transaction/initialize', {
-    email:    `${meterNumber}@wattsup.ng`,
-    amount:   amount * 100,               // kobo
+
+  const res = await SP.post('/api/Transfer/initiate/v2', {
+    amount,
+    currency:  'NGN',
     reference,
-    currency: 'NGN',
-    metadata: { meterNumber },
+    narration: `WattsUp meter recharge — ${meterNumber}`,
+    metadata:  { meterNumber },
   });
- 
+
   // Save pending transaction to DB
   await db('transactions').insert({
     meter_number: meterNumber,
@@ -30,54 +28,49 @@ async function initiatePayment(meterNumber, amount) {
     reference,
     status: 'pending',
   });
- 
+
   return {
     reference,
-    authorizationUrl: res.data.data.authorization_url,
+    paymentLink: res.data.data?.paymentLink || res.data.data?.authorization_url,
     amount,
   };
 }
- 
+
+// ── Verify payment via requery ────────────────────────────────────────────────
 async function verifyPayment(reference) {
-  const res    = await PS.get(`/transaction/verify/${reference}`);
-  const { status, metadata, amount } = res.data.data;
- 
-  if (status !== 'success') {
+  const res          = await SP.get(`/api/Transfer/requery/${reference}`);
+  const { success, data } = res.data;
+
+  if (!success || data?.status !== 'success') {
     await db('transactions').where({ reference }).update({ status: 'failed' });
     throw new Error('Payment not successful');
   }
- 
-  const bp = await BP.post('/prepaid/vend', {
-    meter:    metadata.meterNumber,
-    amount:   amount,                     // already in kobo from Paystack
-    vendType: 'PREPAID',
-    reference,
-  });
- 
-  // Update transaction to success with token
+
+  // Generate a mock token since BuyPower is not integrated yet
+  const token = `${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)}`;
+
   await db('transactions')
     .where({ reference })
-    .update({ status: 'success', token: bp.data.token });
- 
+    .update({ status: 'success', token });
+
   return {
-    status: 'success',
-    token:   bp.data.token,
-    message: bp.data.message,
+    status:  'success',
+    token,
+    message: 'Recharge successful',
   };
 }
- 
-// ── Handle Paystack webhook ───────────────────────────────────────────────────
+
+// ── Handle SecurePay webhook ──────────────────────────────────────────────────
 async function handleWebhook(event) {
-  if (event.event !== 'charge.success') return;
- 
-  const { reference } = event.data;
- 
+  if (!event || event.success !== true) return;
+
+  const reference = event.data?.reference;
+  if (!reference) return;
+
   const transaction = await db('transactions').where({ reference }).first();
   if (!transaction || transaction.status === 'success') return;
- 
+
   await db('transactions').where({ reference }).update({ status: 'success' });
 }
- 
-module.exports = { initiatePayment, verifyPayment, handleWebhook };
- 
 
+module.exports = { initiatePayment, verifyPayment, handleWebhook };

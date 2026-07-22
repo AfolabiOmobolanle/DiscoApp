@@ -3,12 +3,12 @@ const express = require('express');
 const cors    = require('cors');
 
 const meterRoutes        = require('./src/modules/meter/meter.routes');
-const paymentRoutes      = require('./src/modules/payment/payment.routes');
-const notificationRoutes = require('./src/modules/notifications/notifications.routes');
+// const paymentRoutes      = require('./src/modules/payment/payment.routes');
+// const notificationRoutes = require('./src/modules/notifications/notifications.routes');
 
 require('./src/jobs/balancePoller');
 
-require('./jobs/balancePoller'); // starts cron on server boot
+require('./src/jobs/balancePoller.js'); // starts cron on server boot
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -19,8 +19,8 @@ app.use(express.json());
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/meter',         meterRoutes);
-app.use('/api/payment',       paymentRoutes);
-app.use('/api/notifications', notificationRoutes);
+// app.use('/api/payment',       paymentRoutes);
+// app.use('/api/notifications', notificationRoutes);
 
 // ── Health check ─────────────────────────────────────────────────────────────
 // Judges / frontend can hit this to confirm server is live
