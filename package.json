@@ -3,21 +3,20 @@
   "version": "1.0.0",
   "description": "",
   "main": "knexfile.js",
-"scripts": {
-  "start": "node index.js",
-  "dev": "nodemon index.js",
-
-  "mg:make":            "knex migrate:make --knexfile ./src/config/db/knexfile.js",
-  "mg:up":              "knex migrate:up --knexfile ./src/config/db/knexfile.js",
-  "mg:down":            "knex migrate:down --knexfile ./src/config/db/knexfile.js",
-  "mg:latest":          "knex migrate:latest --knexfile ./src/config/db/knexfile.js",
-  "mg:rollback":        "knex migrate:rollback --all --knexfile ./src/config/db/knexfile.js",
-  "mg:rollback-latest": "knex migrate:rollback --knexfile ./src/config/db/knexfile.js",
-  "mg:unlock":          "knex migrate:unlock --knexfile ./src/config/db/knexfile.js",
-  "mg:list":            "knex migrate:list --knexfile ./src/config/db/knexfile.js",
-  "seed":               "knex seed:run --knexfile ./src/config/db/knexfile.js",
-  "seed:make": "knex seed:make --knexfile ./src/config/db/knexfile.js"
-},
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "mg:make": "knex migrate:make --knexfile ./src/config/db/knexfile.js",
+    "mg:up": "knex migrate:up --knexfile ./src/config/db/knexfile.js",
+    "mg:down": "knex migrate:down --knexfile ./src/config/db/knexfile.js",
+    "mg:latest": "knex migrate:latest --knexfile ./src/config/db/knexfile.js",
+    "mg:rollback": "knex migrate:rollback --all --knexfile ./src/config/db/knexfile.js",
+    "mg:rollback-latest": "knex migrate:rollback --knexfile ./src/config/db/knexfile.js",
+    "mg:unlock": "knex migrate:unlock --knexfile ./src/config/db/knexfile.js",
+    "mg:list": "knex migrate:list --knexfile ./src/config/db/knexfile.js",
+    "seed": "knex seed:run --knexfile ./src/config/db/knexfile.js",
+    "seed:make": "knex seed:make --knexfile ./src/config/db/knexfile.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -31,5 +30,8 @@
     "knex": "^3.2.10",
     "node-cron": "^4.5.0",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
