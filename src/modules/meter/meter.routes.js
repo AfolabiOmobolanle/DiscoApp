@@ -4,7 +4,7 @@ const controller = require('./meter.controller');
  
 router.post('/validate', controller.validateMeter);
  
-router.get('/balance/:meter', controller.getMeterBalance);
+router.get('/dashboard/:meter', controller.getMeterDashboard);
  
 module.exports = router;
  

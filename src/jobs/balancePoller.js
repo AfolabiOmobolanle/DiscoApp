@@ -1,9 +1,10 @@
 const cron = require('node-cron');
 const db   = require('../db/knex');
+const { sendLowUnitsAlert } = require('../modules/notifications/notification.service');
 
 // Runs every 2 hours
-cron.schedule('*/5 * * * *', async () => {
-      console.log('[Poller] Running balance check...');
+cron.schedule('0 */2 * * *', async () => {
+  console.log('[Poller] Running balance check...');
 
   try {
     const meters = await db('meters').select('*');
@@ -12,7 +13,7 @@ cron.schedule('*/5 * * * *', async () => {
       // Using seeded last_balance from DB
       if (meter.last_balance <= meter.threshold && meter.fcm_token) {
         console.log(`[Poller] Low balance alert — Meter ${meter.meter_number}: ${meter.last_balance} units`);
-        // Firebase FCM call will go here later
+        await sendLowUnitsAlert(meter.fcm_token, meter.meter_number, meter.last_balance);
       }
     }
 
@@ -31,6 +32,9 @@ async function runOnce() {
     if (meter.last_balance <= meter.threshold) {
       alertCount++;
       console.log(`[Poller] ⚠️  Low balance — Meter ${meter.meter_number} (${meter.disco}): ${meter.last_balance} units`);
+      if (meter.fcm_token) {
+        await sendLowUnitsAlert(meter.fcm_token, meter.meter_number, meter.last_balance);
+      }
     }
   }
 
