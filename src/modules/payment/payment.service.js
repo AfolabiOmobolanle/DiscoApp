@@ -1,10 +1,11 @@
 const axios = require('axios');
 const db    = require('../../db/knex');
+const { sendRechargeSuccess } = require('../notifications/notification.service');
 
-const SP = axios.create({
-  baseURL: process.env.SECUREPAY_BASE_URL || 'https://securepay-staging-api.getsecurepay.ai',
+const PS = axios.create({
+  baseURL: process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co',
   headers: {
-    'X-Api-Key':    process.env.SECUREPAY_API_KEY,
+    Authorization:  `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
     'Content-Type': 'application/json',
   },
 });
@@ -13,13 +14,18 @@ const SP = axios.create({
 async function initiatePayment(meterNumber, amount) {
   const reference = `WU_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-  const res = await SP.post('/api/Transfer/initiate/v2', {
-    amount,
-    currency:  'NGN',
+  const res = await PS.post('/transaction/initialize', {
+    email:        `${meterNumber}@wattsup.ng`,
+    amount:       amount * 100, // Paystack expects kobo
     reference,
-    narration: `WattsUp meter recharge — ${meterNumber}`,
-    metadata:  { meterNumber },
+    currency:     'NGN',
+    callback_url: process.env.PAYSTACK_CALLBACK_URL,
+    metadata:     { meterNumber },
   });
+
+  if (!res.data?.status) {
+    throw new Error(res.data?.message || 'Failed to initialize payment');
+  }
 
   // Save pending transaction to DB
   await db('transactions').insert({
@@ -31,19 +37,19 @@ async function initiatePayment(meterNumber, amount) {
 
   return {
     reference,
-    paymentLink: res.data.data?.paymentLink || res.data.data?.authorization_url,
+    authorizationUrl: res.data.data?.authorization_url,
     amount,
   };
 }
 
-// ── Verify payment via requery ────────────────────────────────────────────────
+// ── Verify payment ─────────────────────────────────────────────────────────────
 async function verifyPayment(reference) {
-  const res          = await SP.get(`/api/Transfer/requery/${reference}`);
-  const { success, data } = res.data;
+  const res = await PS.get(`/transaction/verify/${reference}`);
+  const { status, data, message } = res.data;
 
-  if (!success || data?.status !== 'success') {
+  if (!status || data?.status !== 'success') {
     await db('transactions').where({ reference }).update({ status: 'failed' });
-    throw new Error('Payment not successful');
+    throw new Error(message || 'Payment not successful');
   }
 
   // Generate a mock token since BuyPower is not integrated yet
@@ -53,6 +59,14 @@ async function verifyPayment(reference) {
     .where({ reference })
     .update({ status: 'success', token });
 
+  const transaction = await db('transactions').where({ reference }).first();
+  const meter = await db('meters').where({ meter_number: transaction.meter_number }).first();
+  if (meter?.fcm_token) {
+    await sendRechargeSuccess(meter.fcm_token, token, transaction.amount).catch((err) => {
+      console.error('[Payment] FCM send failed:', err.message);
+    });
+  }
+
   return {
     status:  'success',
     token,
@@ -60,9 +74,9 @@ async function verifyPayment(reference) {
   };
 }
 
-// ── Handle SecurePay webhook ──────────────────────────────────────────────────
+// ── Handle Paystack webhook (signature verified in controller) ────────────────
 async function handleWebhook(event) {
-  if (!event || event.success !== true) return;
+  if (!event || event.event !== 'charge.success') return;
 
   const reference = event.data?.reference;
   if (!reference) return;
@@ -70,7 +84,20 @@ async function handleWebhook(event) {
   const transaction = await db('transactions').where({ reference }).first();
   if (!transaction || transaction.status === 'success') return;
 
-  await db('transactions').where({ reference }).update({ status: 'success' });
+  await verifyPayment(reference).catch((err) => {
+    console.error('[Payment] webhook verify failed:', err.message);
+  });
 }
 
-module.exports = { initiatePayment, verifyPayment, handleWebhook };
+// ── Recent transactions for a meter ───────────────────────────────────────────
+async function getRecentTransactions(meterNumber, limit = 20) {
+  const meter = await db('meters').where({ meter_number: meterNumber }).first();
+  if (!meter) throw new Error('Meter not found');
+
+  return db('transactions')
+    .where({ meter_number: meterNumber })
+    .orderBy('created_at', 'desc')
+    .limit(limit);
+}
+
+module.exports = { initiatePayment, verifyPayment, handleWebhook, getRecentTransactions };

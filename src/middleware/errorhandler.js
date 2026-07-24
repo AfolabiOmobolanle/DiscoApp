@@ -12,40 +12,46 @@ function errorHandler(err, req, res, next) {
   // Knex / Postgres — duplicate entry
   if (err.code === '23505') {
     return res.status(STATUS_CONFLICT).json({
-      success: false,
-      error:   'Duplicate entry — record already exists',
+      success:    false,
+      statusCode: STATUS_CONFLICT,
+      error:      'Duplicate entry — record already exists',
     });
   }
 
   // Knex / Postgres — FK violation
   if (err.code === '23503') {
     return res.status(STATUS_BAD_REQUEST).json({
-      success: false,
-      error:   'Referenced record does not exist',
+      success:    false,
+      statusCode: STATUS_BAD_REQUEST,
+      error:      'Referenced record does not exist',
     });
   }
 
   // Axios / external API errors (SecurePay, BuyPower etc.)
   if (err.isAxiosError) {
     return res.status(STATUS_SERVICE_UNAVAILABLE).json({
-      success: false,
-      error:   'External API error',
-      message: err.response?.data?.message || err.message,
+      success:    false,
+      statusCode: STATUS_SERVICE_UNAVAILABLE,
+      error:      'External API error',
+      message:    err.response?.data?.message || err.message,
     });
   }
 
   // Not found
   if (err.status === STATUS_NOT_FOUND || err.message === 'Not found') {
     return res.status(STATUS_NOT_FOUND).json({
-      success: false,
-      error:   err.message || 'Resource not found',
+      success:    false,
+      statusCode: STATUS_NOT_FOUND,
+      error:      err.message || 'Resource not found',
     });
   }
 
   // Default — 500
-  res.status(err.status || STATUS_INTERNAL_SERVER_ERROR).json({
-    success: false,
-    error:   err.message || 'Internal server error',
+  const status = err.status || STATUS_INTERNAL_SERVER_ERROR;
+  res.status(status).json({
+    success:    false,
+    statusCode: status,
+    error:      err.message || 'Internal server error',
   });
 }
 
